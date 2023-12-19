@@ -1,3 +1,4 @@
+import { BigNumber } from '@ethersproject/bignumber'
 import invariant from 'tiny-invariant'
 import { checkValidAddress, validateAndParseAddress } from '../utils/validateAndParseAddress'
 import { BaseCurrency } from './baseCurrency'
@@ -16,6 +17,13 @@ export class Token extends BaseCurrency {
   public readonly address: string
 
   /**
+   * Relevant for fee-on-transfer (FOT) token taxes,
+   * Not every ERC20 token is FOT token, so this field is optional
+   */
+  public readonly buyFeeBps?: BigNumber
+  public readonly sellFeeBps?: BigNumber
+
+  /**
    *
    * @param chainId {@link BaseCurrency#chainId}
    * @param address The contract address on the chain on which this token lives
@@ -23,6 +31,8 @@ export class Token extends BaseCurrency {
    * @param symbol {@link BaseCurrency#symbol}
    * @param name {@link BaseCurrency#name}
    * @param bypassChecksum If true it only checks for length === 42, startsWith 0x and contains only hex characters
+   * @param buyFeeBps Buy fee tax for FOT tokens, in basis points
+   * @param sellFeeBps Sell fee tax for FOT tokens, in basis points
    */
   public constructor(
     chainId: number,
@@ -30,7 +40,9 @@ export class Token extends BaseCurrency {
     decimals: number,
     symbol?: string,
     name?: string,
-    bypassChecksum?: boolean
+    bypassChecksum?: boolean,
+    buyFeeBps?: BigNumber,
+    sellFeeBps?: BigNumber
   ) {
     super(chainId, decimals, symbol, name)
     if (bypassChecksum) {
@@ -38,6 +50,14 @@ export class Token extends BaseCurrency {
     } else {
       this.address = validateAndParseAddress(address)
     }
+    if (buyFeeBps) {
+      invariant(buyFeeBps.gte(BigNumber.from(0)), 'NON-NEGATIVE FOT FEES')
+    }
+    if (sellFeeBps) {
+      invariant(sellFeeBps.gte(BigNumber.from(0)), 'NON-NEGATIVE FOT FEES')
+    }
+    this.buyFeeBps = buyFeeBps
+    this.sellFeeBps = sellFeeBps
   }
 
   /**
@@ -45,7 +65,7 @@ export class Token extends BaseCurrency {
    * @param other other token to compare
    */
   public equals(other: Currency): boolean {
-    return other.isToken && this.chainId === other.chainId && this.address === other.address
+    return other.isToken && this.chainId === other.chainId && this.address.toLowerCase() === other.address.toLowerCase()
   }
 
   /**
@@ -56,7 +76,7 @@ export class Token extends BaseCurrency {
    */
   public sortsBefore(other: Token): boolean {
     invariant(this.chainId === other.chainId, 'CHAIN_IDS')
-    invariant(this.address !== other.address, 'ADDRESSES')
+    invariant(this.address.toLowerCase() !== other.address.toLowerCase(), 'ADDRESSES')
     return this.address.toLowerCase() < other.address.toLowerCase()
   }
 
